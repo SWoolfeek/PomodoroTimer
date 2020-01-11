@@ -102,7 +102,6 @@ class PomodoroTimer(tk.Frame):
             self._elapsedtime = time.time() - self._start
             self._setTime(self._elapsedtime)
             self._running = 0
-            print(self.work_time)
 
     def clener(self):
         """ Clean main label, and set timer on 00:00. """
