@@ -172,6 +172,7 @@ class PomodoroTimer(tk.Frame):
 
 root = tk.Tk()
 
+root.resizable(width=False, height=False)
 root.title('Pomodoro Timer')
 
 sw = PomodoroTimer(root)
