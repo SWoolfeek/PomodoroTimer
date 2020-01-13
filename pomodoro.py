@@ -1,63 +1,59 @@
 import tkinter as tk
+from tkinter import messagebox as mb
 import time
+import sqlite3
 import pygame
 
 
-class PomodoroTimer(tk.Frame):
+class Main(tk.Frame):
 
-    def __init__(self, parent=None, **kw):
-        tk.Frame.__init__(self, parent, kw)
+    def __init__(self, root):
+        super().__init__(root)
 
-        self.short_break = 5
-        self.long_break = 15
-        self.work_time = 25
-
-        self.main_list = [self.work_time, self.short_break] * 2
-        self.main_list[-1] = self.long_break
-        self.gen = (i for i in self.main_list)
-
-        self.music_file = 'music/bell-ring.mp3'
-
-        self.task = 0
         self._start = 0.0
         self._elapsedtime = 0.0
         self._running = 0
+        self.task = 0
 
-        self.period_1 = 'Work'
+        self.music_file = 'music/bell-ring.mp3'
+        self.db = db
+        self.work_time, self.short_break, self.long_break = db.select_data()
+
+        self.period_1 = 'Working'
         self.period_2 = 'Break'
         self.period = tk.StringVar()
         self.timestr = tk.StringVar()
-        self.main_widgets()
 
-    def main_list_changer(self):
-        """Changing main list which using to  make main generator."""
+        self.main_list_changer()
+        self.init_main()
 
-        self.main_list = [self.work_time, self.short_break] * 4
-        self.main_list[-1] = self.long_break
+    def init_main(self):
+        toolbar = tk.Frame(bg='#d7d8e0', bd=2)
+        toolbar.pack(side=tk.TOP, fill=tk.X)
 
-        self.gen_changer()
+        self.add_img = tk.PhotoImage(file='img/settings.png')
+        btn_open_dialog = tk.Button(toolbar, command=self.open_dialog, bg='#d7d8e0',
+                                    bd=0, compound=tk.TOP, image=self.add_img)
+        btn_open_dialog.pack(side=tk.LEFT)
 
-    def gen_changer(self):
-        self.gen = (i for i in self.main_list)
-
-    def period_changer(self):
-        """Changing period of time, Break or Work time"""
-
-        self.period_1, self.period_2 = self.period_2, self.period_1
-        self.period.set(self.period_1)
-
-    def gener(self):
-        return next(self.gen)
-
-    def main_widgets(self):
         """ Make the time label. """
-        timer = tk.Label(self, textvariable=self.timestr)
+        timer = tk.Label(self, textvariable=self.timestr, font='Arial 20 bold')
         self._setTime(self._elapsedtime)
-        timer.pack(fill=tk.X, expand=tk.NO, pady=2, padx=2)
+        timer.pack(pady=5, padx=60)
 
-        label = tk.Label(self, textvariable=self.period)
+        label = tk.Label(self, textvariable=self.period, font='Arial 17')
         self.period.set(self.period_1)
-        label.pack(fill=tk.X, expand=tk.NO, pady=2, padx=2)
+        label.pack(pady=0, padx=0)
+
+        btn1 = tk.Button(self, text='Start', command=self.start).pack(side=tk.LEFT, pady=5)
+        btn2 = tk.Button(self, text='Pause', command=self.pause).pack(side=tk.LEFT, pady=5)
+        btn3 = tk.Button(self, text='Reset', command=self.reset).pack(side=tk.LEFT, pady=5)
+
+    def _setTime(self, elap):
+        """ Set the time string to Minutes:Seconds """
+        minutes = int(elap / 60)
+        seconds = int(elap - minutes * 60.0)
+        self.timestr.set('%02d:%02d' % (minutes, seconds))
 
     def _update(self):
         """ Update the label with elapsed time. """
@@ -71,31 +67,43 @@ class PomodoroTimer(tk.Frame):
         else:
             self._timer = self.after(50, self._update)
 
-    def _setTime(self, elap):
-        """ Set the time string to Minutes:Seconds """
-        minutes = int(elap / 60)
-        seconds = int(elap - minutes * 60.0)
-        self.timestr.set('%02d:%02d' % (minutes, seconds))
+    def main_list_changer(self):
+        """Changing main list which using to  make main generator."""
 
-    def Start(self):
-        """ Start the stopwatch, ignore if running. """
+        self.main_list = [self.work_time, self.short_break] * 4
+        self.main_list[-1] = self.long_break
+
+        self.generator_changer()
+
+    def generator_changer(self):
+        self.gen = (i for i in self.main_list)
+
+    def iterator(self):
+        return next(self.gen)
+
+    def period_changer(self):
+        """Changing period of time, Break or Work time"""
+
+        self.period_1, self.period_2 = self.period_2, self.period_1
+        self.period.set(self.period_1)
+
+    def start(self):
 
         try:
             if not self._running:
-                self.task = int(self.gener())
+                self.task = int(self.iterator())
                 self._start = time.time() - self._elapsedtime
                 self._update()
                 self._running = 1
         except StopIteration:
             if not self._running:
-                self.gen_changer()
-                self.task = int(self.gener())
+                self.generator_changer()
+                self.task = int(self.iterator())
                 self._start = time.time() - self._elapsedtime
                 self._update()
                 self._running = 1
 
-    def Pause(self):
-        """ Stop the stopwatch, ignore if stopped. """
+    def pause(self):
 
         if self._running:
             self.after_cancel(self._timer)
@@ -103,64 +111,25 @@ class PomodoroTimer(tk.Frame):
             self._setTime(self._elapsedtime)
             self._running = 0
 
+    def reset(self):
+        """ Reset to starting point, to first work period. """
+        self.clener()
+
+        self.pause()
+        self.work_time, self.short_break, self.long_break = db.select_data()
+        self.generator_changer()
+
+        self.period_1 = 'Working'
+        self.period_2 = 'Break'
+        self.period.set(self.period_1)
+
     def clener(self):
         """ Clean main label, and set timer on 00:00. """
         self._start = time.time()
         self._elapsedtime = 0.0
         self._setTime(self._elapsedtime)
 
-    def Reset(self):
-        """ Reset to starting point, to first work period. """
-        self.clener()
-
-        self.Pause()
-        self.gen_changer()
-
-        self.period_1 = 'Work'
-        self.period_2 = 'Break'
-        self.period.set(self.period_1)
-
-    def menu_widgets(self):
-        """ Make the drop menu. """
-        self.win = tk.Toplevel(self)
-
-        tk.Label(self.win, text='Set time in minutes', font=20).grid(row=0, columnspan=2)
-        tk.Label(self.win, text='Work time', font=20).grid(row=1, column=0)
-        tk.Label(self.win, text='Short break', font=20).grid(row=2, column=0)
-        tk.Label(self.win, text='Long break', font=20).grid(row=3, column=0)
-
-        self.entry_2 = tk.Entry(self.win, width=3, font=15)
-        self.entry_3 = tk.Entry(self.win, width=3, font=15)
-        self.entry_4 = tk.Entry(self.win, width=3, font=15)
-
-        tk.Button(self.win, text='Submit', command=self.answer).grid(row=4, column=2, sticky='w')
-
-        self.entry_2.grid(row=1, column=1, sticky='e')
-        self.entry_3.grid(row=2, column=1, sticky='e')
-        self.entry_4.grid(row=3, column=1, sticky='e')
-
-    def answer(self):
-        """ Checking answer in drop menu. """
-        try:
-            self.work_time = int(self.entry_2.get())
-        except ValueError:
-            pass
-
-        try:
-            self.short_break = int(self.entry_3.get())
-        except ValueError:
-            pass
-
-        try:
-            self.long_break = int(self.entry_4.get())
-        except ValueError:
-            pass
-
-        self.main_list_changer()
-        self.win.destroy()
-
     def music(self):
-
         """ Play music, when period is ended. """
         pygame.init()
 
@@ -169,24 +138,97 @@ class PomodoroTimer(tk.Frame):
         time.sleep(3)
         pygame.mixer.music.stop()
 
+    def open_dialog(self):
+        Child()
 
-root = tk.Tk()
 
-root.resizable(width=False, height=False)
-root.title('Pomodoro Timer')
+class Child(tk.Toplevel):
+    def __init__(self):
+        super().__init__(root)
+        self.db = db
+        self.init_child()
 
-sw = PomodoroTimer(root)
-sw.pack(side=tk.TOP)
+    def init_child(self):
+        self.title('Доходы рассходы')
+        self.geometry('200x130+400+300')
+        self.resizable(False, False)
 
-tk.Button(root, text='Start', command=sw.Start).pack(side=tk.LEFT)
-tk.Button(root, text='Pause', command=sw.Pause).pack(side=tk.LEFT)
-tk.Button(root, text='Reset', command=sw.Reset).pack(side=tk.LEFT)
-tk.Button(root, text='Quit', command=root.quit).pack(side=tk.LEFT)
+        child_font = ('Arial', '15')
 
-main_menu = tk.Menu(root)
-root.configure(menu=main_menu)
-first_item = tk.Menu(main_menu, tearoff=0)
-main_menu.add_cascade(label='Setings', menu=first_item)
-first_item.add_command(label='Open', command=sw.menu_widgets)
+        tk.Label(self, text='Set time in minutes', font=child_font).grid(row=0, columnspan=2)
+        tk.Label(self, text='Work time', font=child_font).grid(row=1, column=0)
+        tk.Label(self, text='Short break', font=child_font).grid(row=2, column=0)
+        tk.Label(self, text='Long break', font=child_font).grid(row=3, column=0)
 
-root.mainloop()
+        self.entry_1 = tk.Entry(self, width=6, font=child_font, justify=tk.RIGHT)
+        self.entry_2 = tk.Entry(self, width=6, font=child_font, justify=tk.RIGHT)
+        self.entry_3 = tk.Entry(self, width=6, font=child_font, justify=tk.RIGHT)
+
+        tk.Button(self, text='Submit', padx=9, command=self.answer).grid(row=4, column=1, sticky='e')
+
+        self.entry_1.grid(row=1, column=1, sticky='e')
+        self.entry_2.grid(row=2, column=1, sticky='e')
+        self.entry_3.grid(row=3, column=1, sticky='e')
+
+        self.grab_set()
+        self.focus_set()
+
+    def answer(self):
+        """ Checking answer in drop menu, and add it to DB """
+        try:
+            work_time = int(self.entry_1.get())
+            short_break = int(self.entry_2.get())
+            long_break = int(self.entry_3.get())
+            self.db.inset_data(work_time, short_break, long_break)
+        except ValueError:
+            pass
+
+        self.message()
+
+    def message(self):
+        mb.showinfo(title="Changing settings.", message="Hit 'Reset' button to save new settings.")
+        self.destroy()
+
+
+class DB:
+    def __init__(self):
+        self.conn = sqlite3.connect('tomato.db')
+        self.cursor = self.conn.cursor()
+        self.cursor.execute(
+            '''CREATE TABLE IF NOT EXISTS settings(
+            id integer primary key, 
+            work_time integer, 
+            short_break integer, 
+            long_break integer
+            )'''
+        )
+        self.conn.commit()
+
+    def inset_data(self, work_time, short_break, long_break):
+        self.cursor.execute('''UPDATE settings SET work_time=?, short_break=?, long_break=? WHERE id =1''',
+                            (work_time, short_break, long_break))
+        self.conn.commit()
+
+    def select_data(self):
+        try:
+            self.cursor.execute('''SELECT work_time, short_break, long_break FROM settings WHERE id = 1''')
+            self.conn.commit()
+            for a, b, c in self.cursor:
+                pass
+            return a, b, c
+        except:
+            self.cursor.execute('''INSERT INTO settings(work_time, short_break, long_break) VALUES (25,5,15)''')
+            self.conn.commit()
+            return 25, 15, 5
+
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    db = DB()
+    app = Main(root)
+    app.pack()
+
+    root.title('Pomodoro timer')
+    root.geometry('300x130+300+200')
+    root.resizable(width=False, height=False)
+    root.mainloop()
